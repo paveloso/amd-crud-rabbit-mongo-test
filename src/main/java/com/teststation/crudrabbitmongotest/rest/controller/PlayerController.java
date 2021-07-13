@@ -1,12 +1,9 @@
 package com.teststation.crudrabbitmongotest.rest.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.teststation.crudrabbitmongotest.integration.IntegrationClient;
-import com.teststation.crudrabbitmongotest.model.Player;
 import com.teststation.crudrabbitmongotest.rest.dto.PlayerDto;
 import com.teststation.crudrabbitmongotest.rest.dto.ResponseDto;
 import com.teststation.crudrabbitmongotest.service.PlayerService;
-import com.teststation.crudrabbitmongotest.service.RabbitMqSender;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -14,16 +11,11 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/player")
+@Slf4j
 public class PlayerController {
 
     @Autowired
     private PlayerService playerService;
-    @Autowired
-    private RabbitMqSender rabbitMqSender;
-    @Autowired
-    private IntegrationClient integrationClient;
-
-    private ObjectMapper jsonMapper = new ObjectMapper();
 
     @ResponseBody
     @ResponseStatus(value = HttpStatus.CREATED)
@@ -36,10 +28,9 @@ public class PlayerController {
         ResponseDto responseDto = new ResponseDto(ResponseDto.Status.SUCCESS, "Player saved to DB successfully");
 
         try {
-            Player savedPlayer = playerService.savePlayer(player);
-            rabbitMqSender.send(jsonMapper.writeValueAsString(savedPlayer));
-            integrationClient.sendData(jsonMapper.writeValueAsString(savedPlayer));
+            playerService.processPlayer(player);
         } catch (Exception ex) {
+            log.error("Exception occurred during save method call, playerDto: {}", player);
             responseDto.setStatus(ResponseDto.Status.FAIL);
             responseDto.setMessage(ex.getMessage());
         }
@@ -66,6 +57,6 @@ public class PlayerController {
     public ResponseDto deletePlayer(@RequestParam String name) {
         return playerService.deletePlayer(name)
                 ? new ResponseDto(ResponseDto.Status.SUCCESS, "Player successfully deleted")
-                : new ResponseDto(ResponseDto.Status.FAIL, "Couldn't find player by provided id");
+                : new ResponseDto(ResponseDto.Status.FAIL, "Couldn't find player by provided name");
     }
 }

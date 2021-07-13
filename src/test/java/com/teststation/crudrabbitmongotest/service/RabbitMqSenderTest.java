@@ -1,6 +1,7 @@
 package com.teststation.crudrabbitmongotest.service;
 
 import com.teststation.crudrabbitmongotest.CrudRabbitMongoTestApplication;
+import com.teststation.crudrabbitmongotest.dao.PlayerRepository;
 import com.teststation.crudrabbitmongotest.model.Player;
 import com.teststation.crudrabbitmongotest.rest.controller.PlayerController;
 import com.teststation.crudrabbitmongotest.rest.dto.PlayerDto;
@@ -43,25 +44,30 @@ public class RabbitMqSenderTest {
     private MapperFacade mapperFacade;
     @MockBean
     private PlayerService playerService;
+    @MockBean
+    private PlayerRepository playerRepository;
 
-    private ObjectMapper jsonMapper = new ObjectMapper();
+    private final ObjectMapper jsonMapper = new ObjectMapper();
 
     private PlayerDto playerDto;
 
     @Before
     public void init() {
         playerDto = new PlayerDto("player", "country", 1);
-        Mockito.when(playerService.savePlayer(playerDto)).thenReturn(mapperFacade.map(playerDto, Player.class));
-        playerController.savePlayer(playerDto);
     }
 
     @Test
-    public void sendMessageInvokedAfterPlayerSaved() {
+    public void sendMessageInvokedAfterPlayerSaved() throws com.fasterxml.jackson.core.JsonProcessingException {
+        Mockito.when(playerRepository.findByName(playerDto.getName())).thenReturn(mapperFacade.map(playerDto, Player.class));
+        playerController.savePlayer(playerDto);
+        Mockito.verify(playerService, Mockito.times(1)).processPlayer(Mockito.any(PlayerDto.class));
         Mockito.verify(mqSender, Mockito.times(1)).send(Mockito.anyString());
     }
 
     @Test
-    public void messageDeliveredToQueueAfterPlayerSaved() throws JsonProcessingException {
+    public void messageDeliveredToQueueAfterPlayerSaved() throws JsonProcessingException, com.fasterxml.jackson.core.JsonProcessingException {
+        Mockito.when(playerService.savePlayer(playerDto)).thenReturn(mapperFacade.map(playerDto, Player.class));
+        playerService.processPlayer(playerDto);
         rabbitTemplate.convertAndSend(testExchange, testRoutingkey, jsonMapper.writeValueAsString(mapperFacade.map(playerDto, Player.class)));
         Message receivedMessage = rabbitTemplate.receive(testQueue.getName());
         Assert.assertNotNull(receivedMessage);
